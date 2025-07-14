@@ -1,7 +1,5 @@
-
 import { useState } from 'react';
 import { Send, Bot, User } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 
 interface Message {
   id: number;
@@ -21,7 +19,6 @@ const ChatInterface = () => {
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const { toast } = useToast();
 
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
@@ -48,34 +45,52 @@ const ChatInterface = () => {
       webhookUrl.searchParams.append('session_id', `session_${Date.now()}`);
       webhookUrl.searchParams.append('source', 'ia_hub_chat');
       
+      console.log('URL do webhook:', webhookUrl.toString());
+      
+      // Usando fetch com configuração explícita para texto puro
       const response = await fetch(webhookUrl.toString(), {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
+          'Accept': 'text/plain, */*',
+          'Content-Type': 'text/plain'
         },
+        cache: 'no-cache'
       });
-
+      
+      console.log('Status da resposta:', response.status);
+      console.log('Headers da resposta:', response.headers);
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
+      // FORÇAR processamento como texto puro
+      const botResponseText = await response.text();
+      console.log('Resposta bruta recebida:', botResponseText);
+      console.log('Tipo da resposta:', typeof botResponseText);
+      
+      // Verificar se a resposta não está vazia
+      if (!botResponseText || botResponseText.trim() === '') {
+        throw new Error('Resposta vazia do servidor');
+      }
 
-      const data = await response.json();
-      console.log('Resposta recebida:', data);
-
-      // Processar a resposta do webhook
-      let botResponseText = data.response || data.message || "Obrigado pela sua pergunta! Estou processando sua solicitação e em breve terei uma resposta personalizada para você.";
+      // Limpar e processar a resposta
+      const cleanedResponse = botResponseText.trim();
+      console.log('Resposta limpa:', cleanedResponse);
 
       const botResponse: Message = {
         id: messages.length + 2,
-        text: botResponseText,
+        text: cleanedResponse,
         sender: 'bot',
         timestamp: new Date()
       };
 
       setMessages(prev => [...prev, botResponse]);
+      console.log('Mensagem do bot adicionada com sucesso');
       
     } catch (error) {
-      console.error('Erro ao enviar mensagem:', error);
+      console.error('Erro detalhado:', error);
+      console.error('Stack trace:', error.stack);
       
       // Fallback para uma resposta padrão em caso de erro
       const fallbackResponse: Message = {
@@ -87,11 +102,8 @@ const ChatInterface = () => {
       
       setMessages(prev => [...prev, fallbackResponse]);
       
-      toast({
-        title: "Aviso",
-        description: "Estou com algumas dificuldades técnicas, mas continuo aqui para ajudar!",
-        variant: "default",
-      });
+      // Toast simples sem dependência externa
+      alert("Estou com algumas dificuldades técnicas, mas continuo aqui para ajudar!");
     } finally {
       setIsTyping(false);
     }
@@ -141,7 +153,7 @@ const ChatInterface = () => {
                   : 'bg-gray-700 text-gray-100'
               }`}
             >
-              <p className="text-sm leading-relaxed">{message.text}</p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
             </div>
 
             {message.sender === 'user' && (
