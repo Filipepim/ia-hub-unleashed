@@ -18,8 +18,8 @@ const Guias = () => {
 
   const guides = [
     {
-      title: "O que torna um atendimento Humano? O Blueprint Secreto da Conexão Digital",
-      description: "Descubra os segredos para humanizar agentes de WhatsApp e criar conexões digitais verdadeiramente humanas.",
+      title: "O que torna um atendimento Humano?",
+      description: "Pesquisa feita no calcenter da FIEC com conversas REAIS. Pesquisa realizada no dia 14/07/2025",
       readTime: "45 min",
       category: "Avançado",
       tags: ["humanização", "whatsapp", "agentes", "atendimento"],
