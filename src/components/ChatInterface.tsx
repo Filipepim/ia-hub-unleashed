@@ -1,7 +1,5 @@
-
 import { useState } from 'react';
 import { Send, Bot, User } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 
 interface Message {
   id: number;
@@ -21,7 +19,6 @@ const ChatInterface = () => {
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const { toast } = useToast();
 
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
@@ -41,43 +38,64 @@ const ChatInterface = () => {
     try {
       console.log('Enviando mensagem para o webhook:', currentInput);
       
-      // Construir URL com parâmetros de query para GET
       const webhookUrl = new URL('https://n8n.desafioalrescate.com/webhook/comunidade');
       webhookUrl.searchParams.append('message', currentInput);
       webhookUrl.searchParams.append('timestamp', new Date().toISOString());
       webhookUrl.searchParams.append('session_id', `session_${Date.now()}`);
       webhookUrl.searchParams.append('source', 'ia_hub_chat');
       
+      console.log('URL do webhook:', webhookUrl.toString());
+      
       const response = await fetch(webhookUrl.toString(), {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
         },
+        cache: 'no-cache' // Desabilita o cache para garantir respostas frescas
       });
 
+      console.log('Status da resposta:', response.status);
+      console.log('Headers da resposta:', response.headers);
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`Erro HTTP! Status: ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log('Resposta recebida:', data);
+      const jsonResponse = await response.json();
+      console.log('Resposta JSON bruta:', jsonResponse);
 
-      // Processar a resposta do webhook
-      let botResponseText = data.response || data.message || "Obrigado pela sua pergunta! Estou processando sua solicitação e em breve terei uma resposta personalizada para você.";
+      let cleanedResponse = "Desculpe, não consegui entender a resposta do bot.";
+
+      // Tenta extrair a resposta de diferentes campos JSON
+      if (jsonResponse.response) {
+        cleanedResponse = jsonResponse.response;
+      } else if (jsonResponse.output) {
+        cleanedResponse = jsonResponse.output;
+      } else if (jsonResponse.message) {
+        cleanedResponse = jsonResponse.message;
+      } else if (typeof jsonResponse === 'string') {
+        cleanedResponse = jsonResponse;
+      } else {
+        cleanedResponse = JSON.stringify(jsonResponse); // Fallback para stringify se for um objeto inesperado
+      }
+
+      console.log('Resposta limpa do bot:', cleanedResponse);
 
       const botResponse: Message = {
         id: messages.length + 2,
-        text: botResponseText,
+        text: cleanedResponse,
         sender: 'bot',
         timestamp: new Date()
       };
 
       setMessages(prev => [...prev, botResponse]);
+      console.log('Mensagem do bot adicionada com sucesso');
       
     } catch (error) {
-      console.error('Erro ao enviar mensagem:', error);
+      console.error('Erro detalhado:', error);
+      console.error('Stack trace:', error.stack);
       
-      // Fallback para uma resposta padrão em caso de erro
       const fallbackResponse: Message = {
         id: messages.length + 2,
         text: "Desculpe, estou com dificuldades técnicas no momento. Mas posso te ajudar com algumas sugestões: você gostaria de criar um agente para atendimento ao cliente, vendas ou suporte técnico? Conte-me mais sobre seu projeto!",
@@ -87,11 +105,7 @@ const ChatInterface = () => {
       
       setMessages(prev => [...prev, fallbackResponse]);
       
-      toast({
-        title: "Aviso",
-        description: "Estou com algumas dificuldades técnicas, mas continuo aqui para ajudar!",
-        variant: "default",
-      });
+      alert("Estou com algumas dificuldades técnicas, mas continuo aqui para ajudar!");
     } finally {
       setIsTyping(false);
     }
@@ -141,7 +155,7 @@ const ChatInterface = () => {
                   : 'bg-gray-700 text-gray-100'
               }`}
             >
-              <p className="text-sm leading-relaxed">{message.text}</p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
             </div>
 
             {message.sender === 'user' && (
@@ -194,3 +208,4 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
+
