@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Send, Bot, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -59,11 +58,20 @@ const ChatInterface = () => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log('Resposta recebida:', data);
-
-      // Processar a resposta do webhook
-      let botResponseText = data.response || data.message || "Obrigado pela sua pergunta! Estou processando sua solicitação e em breve terei uma resposta personalizada para você.";
+      // MODIFICAÇÃO: Tentar texto primeiro, depois JSON se necessário
+      let botResponseText;
+      const responseText = await response.text();
+      console.log('Resposta texto recebida:', responseText);
+      
+      // Verificar se é JSON válido
+      try {
+        const data = JSON.parse(responseText);
+        console.log('Resposta é JSON válido:', data);
+        botResponseText = data.response || data.message || responseText;
+      } catch (jsonError) {
+        console.log('Resposta é texto puro');
+        botResponseText = responseText || "Obrigado pela sua pergunta! Estou processando sua solicitação.";
+      }
 
       const botResponse: Message = {
         id: messages.length + 2,
@@ -141,7 +149,7 @@ const ChatInterface = () => {
                   : 'bg-gray-700 text-gray-100'
               }`}
             >
-              <p className="text-sm leading-relaxed">{message.text}</p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
             </div>
 
             {message.sender === 'user' && (
