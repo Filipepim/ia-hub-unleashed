@@ -1,7 +1,5 @@
-
 import { useState } from 'react';
 import { Send, Bot, User } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 
 interface Message {
   id: number;
@@ -21,7 +19,6 @@ const ChatInterface = () => {
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const { toast } = useToast();
 
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
@@ -39,31 +36,104 @@ const ChatInterface = () => {
     setIsTyping(true);
 
     try {
-      console.log('Enviando mensagem para o webhook:', currentInput);
+      console.log('=== INICIANDO ENVIO PARA WEBHOOK ===');
+      console.log('Mensagem do usuário:', currentInput);
       
-      // Construir URL com parâmetros de query para GET
-      const webhookUrl = new URL('https://n8n.desafioalrescate.com/webhook/comunidade');
-      webhookUrl.searchParams.append('message', currentInput);
-      webhookUrl.searchParams.append('timestamp', new Date().toISOString());
-      webhookUrl.searchParams.append('session_id', `session_${Date.now()}`);
-      webhookUrl.searchParams.append('source', 'ia_hub_chat');
-      
-      const response = await fetch(webhookUrl.toString(), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const baseUrl = 'https://n8n.desafioalrescate.com/webhook/comunidade';
+      const params = new URLSearchParams({
+        message: currentInput,
+        timestamp: new Date().toISOString(),
+        session_id: `session_${Date.now()}`,
+        source: 'ia_hub_chat'
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      
+      const fullUrl = `${baseUrl}?${params.toString()}`;
+      console.log('🔗 URL completa sendo chamada:', fullUrl);
+      
+      let response;
+      try {
+        response = await fetch(fullUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'IA-Hub-Chat/1.0',
+          },
+        });
+      } catch (corsError) {
+        console.log('⚠️ Erro de CORS detectado, tentando com proxy...');
+        
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(fullUrl)}`;
+        console.log('🔄 Tentando com proxy:', proxyUrl);
+        
+        response = await fetch(proxyUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+        });
       }
 
-      const data = await response.json();
-      console.log('Resposta recebida:', data);
+      console.log('=== RESPOSTA DO WEBHOOK ===');
+      console.log('📊 Status:', response.status);
+      console.log('📋 Status Text:', response.statusText);
+      console.log('🏷️ Headers:', Object.fromEntries(response.headers.entries()));
 
-      // Processar a resposta do webhook
-      let botResponseText = data.response || data.message || "Obrigado pela sua pergunta! Estou processando sua solicitação e em breve terei uma resposta personalizada para você.";
+      if (!response.ok) {
+        console.error('❌ Erro na resposta do webhook:', response.status, response.statusText);
+        
+        try {
+          const errorText = await response.text();
+          console.error('📝 Detalhes do erro:', errorText);
+          throw new Error(`Webhook retornou erro ${response.status}: ${errorText}`);
+        } catch (readError) {
+          throw new Error(`Webhook retornou erro: ${response.status} - ${response.statusText}`);
+        }
+      }
+
+      // Ler a resposta bruta
+      const responseText = await response.text();
+      console.log('📝 Resposta bruta do webhook:', responseText);
+      console.log('📏 Tamanho da resposta:', responseText.length);
+
+      let botResponseText = '';
+
+      // Verificar se a resposta está vazia
+      if (!responseText || responseText.trim() === '') {
+        console.log('⚠️ Resposta vazia do webhook');
+        botResponseText = '🔧 Webhook está funcionando, mas retornou resposta vazia. Verifique a configuração do "Respond to Webhook" no N8N.';
+      } else {
+        // Tentar fazer parse do JSON
+        try {
+          const data = JSON.parse(responseText);
+          console.log('✅ Dados JSON parseados:', data);
+          
+          // Processar diferentes formatos de resposta
+          if (data && typeof data === 'object') {
+            botResponseText = data.response || 
+                             data.message || 
+                             data.answer || 
+                             data.reply || 
+                             data.text || 
+                             data.content ||
+                             JSON.stringify(data);
+          } else {
+            botResponseText = String(data);
+          }
+          
+        } catch (jsonError) {
+          console.log('⚠️ Resposta não é JSON válido, usando como texto:', responseText);
+          
+          // Se não é JSON, usar a resposta como texto
+          botResponseText = responseText;
+        }
+      }
+
+      // Garantir que temos uma resposta válida
+      if (!botResponseText || botResponseText.trim() === '') {
+        botResponseText = '🤖 Recebi sua mensagem, mas não consegui gerar uma resposta. Verifique a configuração do webhook.';
+      }
+
+      console.log('🤖 Texto final da resposta do bot:', botResponseText);
 
       const botResponse: Message = {
         id: messages.length + 2,
@@ -75,23 +145,35 @@ const ChatInterface = () => {
       setMessages(prev => [...prev, botResponse]);
       
     } catch (error) {
-      console.error('Erro ao enviar mensagem:', error);
+      console.error('=== ERRO NO WEBHOOK ===');
+      console.error('🔍 Tipo do erro:', error.constructor.name);
+      console.error('📝 Mensagem do erro:', error.message);
+      console.error('📊 Stack trace:', error.stack);
       
-      // Fallback para uma resposta padrão em caso de erro
+      let errorMessage = '';
+      
+      // Diferentes tipos de erro
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        errorMessage = '🌐 Erro de rede - webhook pode estar inacessível ou com problemas de conectividade.';
+      } else if (error.message.includes('CORS')) {
+        errorMessage = '🔒 Erro de CORS - configure os headers no N8N ou use um proxy.';
+      } else if (error.message.includes('500')) {
+        errorMessage = '⚙️ Erro interno do servidor (500) - verifique a configuração do workflow no N8N.';
+      } else if (error.message.includes('404')) {
+        errorMessage = '❓ Webhook não encontrado (404) - verifique a URL e se o workflow está ativo.';
+      } else {
+        errorMessage = `❌ Erro desconhecido: ${error.message}`;
+      }
+      
       const fallbackResponse: Message = {
         id: messages.length + 2,
-        text: "Desculpe, estou com dificuldades técnicas no momento. Mas posso te ajudar com algumas sugestões: você gostaria de criar um agente para atendimento ao cliente, vendas ou suporte técnico? Conte-me mais sobre seu projeto!",
+        text: `${errorMessage}\n\n🔧 Verifique o console (F12) para mais detalhes técnicos.`,
         sender: 'bot',
         timestamp: new Date()
       };
       
       setMessages(prev => [...prev, fallbackResponse]);
       
-      toast({
-        title: "Aviso",
-        description: "Estou com algumas dificuldades técnicas, mas continuo aqui para ajudar!",
-        variant: "default",
-      });
     } finally {
       setIsTyping(false);
     }
@@ -141,7 +223,7 @@ const ChatInterface = () => {
                   : 'bg-gray-700 text-gray-100'
               }`}
             >
-              <p className="text-sm leading-relaxed">{message.text}</p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
             </div>
 
             {message.sender === 'user' && (
