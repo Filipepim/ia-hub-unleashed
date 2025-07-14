@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Send, Bot, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -48,26 +47,27 @@ const ChatInterface = () => {
       webhookUrl.searchParams.append('session_id', `session_${Date.now()}`);
       webhookUrl.searchParams.append('source', 'ia_hub_chat');
       
+      // Fazer requisição simples sem headers que podem causar problemas
       const response = await fetch(webhookUrl.toString(), {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log('Resposta recebida:', data);
-
-      // Processar a resposta do webhook
-      let botResponseText = data.response || data.message || "Obrigado pela sua pergunta! Estou processando sua solicitação e em breve terei uma resposta personalizada para você.";
+      // Forçar processamento como texto - método mais direto
+      const botResponseText = await response.text();
+      console.log('Resposta recebida (texto puro):', botResponseText);
+      
+      // Verificar se a resposta não está vazia
+      if (!botResponseText || botResponseText.trim() === '') {
+        throw new Error('Resposta vazia do servidor');
+      }
 
       const botResponse: Message = {
         id: messages.length + 2,
-        text: botResponseText,
+        text: botResponseText.trim(),
         sender: 'bot',
         timestamp: new Date()
       };
@@ -141,7 +141,7 @@ const ChatInterface = () => {
                   : 'bg-gray-700 text-gray-100'
               }`}
             >
-              <p className="text-sm leading-relaxed">{message.text}</p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
             </div>
 
             {message.sender === 'user' && (
