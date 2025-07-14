@@ -34,7 +34,7 @@ const GuiaHumanizacaoAgentesMicromomentos = () => {
             
             <div className="bg-blue-900 border-l-4 border-blue-400 p-6 rounded-r-lg mb-6">
               <p className="text-blue-100 leading-relaxed mb-4">
-                Imagine um atendente que digita <strong>"respondeu**"</strong> e, imediatamente, corrige para <strong>"respondeu **"</strong> em uma mensagem subsequente.
+                Imagine um atendente que digita <strong>"tudo cert!"</strong> e, imediatamente, corrige para <strong>"Certo*"</strong> em uma mensagem subsequente.
               </p>
               <p className="text-blue-100 leading-relaxed">
                 Um bot, idealmente, não cometeria esse erro. Mas essa autocorreção, esse pequeno "deslize" e o reconhecimento dele, reforça a <strong>autenticidade da interação</strong> e a presença de uma pessoa real do outro lado.
