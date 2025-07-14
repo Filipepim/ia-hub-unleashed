@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Send, Bot, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -48,22 +47,63 @@ const ChatInterface = () => {
       webhookUrl.searchParams.append('session_id', `session_${Date.now()}`);
       webhookUrl.searchParams.append('source', 'ia_hub_chat');
       
+      console.log('URL do webhook:', webhookUrl.toString());
+      
       const response = await fetch(webhookUrl.toString(), {
         method: 'GET',
         headers: {
+          'Accept': 'application/json',
           'Content-Type': 'application/json',
         },
       });
 
+      console.log('Status da resposta:', response.status);
+      console.log('Headers da resposta:', response.headers);
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`Erro HTTP! Status: ${response.status} - ${response.statusText}`);
       }
 
-      const data = await response.json();
-      console.log('Resposta recebida:', data);
+      // Verificar se a resposta é JSON válido
+      const contentType = response.headers.get('content-type');
+      let data;
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // Se não for JSON, tenta ler como texto
+        const textResponse = await response.text();
+        console.log('Resposta como texto:', textResponse);
+        
+        // Tenta fazer parse do texto como JSON
+        try {
+          data = JSON.parse(textResponse);
+        } catch (parseError) {
+          console.error('Erro ao fazer parse do JSON:', parseError);
+          data = { response: textResponse };
+        }
+      }
 
-      // Processar a resposta do webhook
-      let botResponseText = data.response || data.message || "Obrigado pela sua pergunta! Estou processando sua solicitação e em breve terei uma resposta personalizada para você.";
+      console.log('Dados recebidos do webhook:', data);
+
+      // Processar a resposta do webhook com múltiplas possibilidades
+      let botResponseText = '';
+      
+      if (data.response) {
+        botResponseText = data.response;
+      } else if (data.message) {
+        botResponseText = data.message;
+      } else if (data.answer) {
+        botResponseText = data.answer;
+      } else if (data.reply) {
+        botResponseText = data.reply;
+      } else if (data.text) {
+        botResponseText = data.text;
+      } else if (typeof data === 'string') {
+        botResponseText = data;
+      } else {
+        botResponseText = "Obrigado pela sua pergunta! Estou processando sua solicitação e em breve terei uma resposta personalizada para você.";
+      }
 
       const botResponse: Message = {
         id: messages.length + 2,
@@ -75,7 +115,7 @@ const ChatInterface = () => {
       setMessages(prev => [...prev, botResponse]);
       
     } catch (error) {
-      console.error('Erro ao enviar mensagem:', error);
+      console.error('Erro detalhado ao enviar mensagem:', error);
       
       // Fallback para uma resposta padrão em caso de erro
       const fallbackResponse: Message = {
